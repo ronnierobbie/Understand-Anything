@@ -10,3 +10,4 @@ export {
   parseProjectSummaryResponse,
 } from "./analyzer/llm-analyzer.js";
 export type { LLMFileAnalysis, LLMProjectSummary } from "./analyzer/llm-analyzer.js";
+export { SearchEngine, type SearchResult, type SearchOptions } from "./search.js";
