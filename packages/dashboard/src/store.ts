@@ -25,6 +25,10 @@ interface DashboardStore {
 
   showLayers: boolean;
 
+  nodeExplanation: string | null;
+  nodeExplanationLoading: boolean;
+  nodeExplanationCache: Record<string, string>;
+
   tourActive: boolean;
   currentTourStep: number;
   tourHighlightedNodeIds: string[];
@@ -36,6 +40,7 @@ interface DashboardStore {
   sendChatMessage: (message: string) => Promise<void>;
   clearChat: () => void;
   toggleLayers: () => void;
+  explainNode: (nodeId: string) => Promise<void>;
 
   startTour: () => void;
   stopTour: () => void;
@@ -132,6 +137,10 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
 
   showLayers: false,
 
+  nodeExplanation: null,
+  nodeExplanationLoading: false,
+  nodeExplanationCache: {},
+
   tourActive: false,
   currentTourStep: 0,
   tourHighlightedNodeIds: [],
@@ -142,7 +151,7 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
     const searchResults = query.trim() ? searchEngine.search(query) : [];
     set({ graph, searchEngine, searchResults });
   },
-  selectNode: (nodeId) => set({ selectedNodeId: nodeId }),
+  selectNode: (nodeId) => set({ selectedNodeId: nodeId, nodeExplanation: null }),
   setSearchQuery: (query) => {
     const engine = get().searchEngine;
     if (!engine || !query.trim()) {
@@ -215,6 +224,84 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
   clearChat: () => set({ chatMessages: [] }),
 
   toggleLayers: () => set((state) => ({ showLayers: !state.showLayers })),
+
+  explainNode: async (nodeId) => {
+    const { apiKey, graph, nodeExplanationCache } = get();
+    if (!apiKey || !graph) return;
+
+    // Check cache first
+    if (nodeExplanationCache[nodeId]) {
+      set({ nodeExplanation: nodeExplanationCache[nodeId] });
+      return;
+    }
+
+    const node = graph.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+
+    set({ nodeExplanationLoading: true, nodeExplanation: null });
+
+    try {
+      const connections = graph.edges.filter(
+        (e) => e.source === nodeId || e.target === nodeId,
+      );
+      const connDetails = connections
+        .map((e) => {
+          const isSource = e.source === nodeId;
+          const otherId = isSource ? e.target : e.source;
+          const otherNode = graph.nodes.find((n) => n.id === otherId);
+          return `${isSource ? "->" : "<-"} [${e.type}] ${otherNode?.name ?? otherId}`;
+        })
+        .join("\n");
+
+      const layer = graph.layers.find((l) => l.nodeIds.includes(nodeId));
+
+      const prompt = [
+        `Explain the following code component in plain English. Be thorough but accessible.`,
+        ``,
+        `**Component:** ${node.name}`,
+        `**Type:** ${node.type}`,
+        `**File:** ${node.filePath ?? "N/A"}`,
+        `**Summary:** ${node.summary}`,
+        `**Complexity:** ${node.complexity}`,
+        `**Tags:** ${node.tags.join(", ") || "none"}`,
+        layer ? `**Layer:** ${layer.name} — ${layer.description}` : "",
+        ``,
+        `**Connections:**`,
+        connDetails || "  none",
+        ``,
+        `Explain:`,
+        `1. What this component does and WHY it exists`,
+        `2. How it fits into the larger architecture`,
+        `3. Key relationships with other components`,
+        `4. Any patterns or concepts worth understanding`,
+        ``,
+        `Keep the explanation concise (2-4 paragraphs). Use markdown formatting.`,
+      ].join("\n");
+
+      const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 512,
+        messages: [{ role: "user", content: prompt }],
+      });
+
+      const text =
+        response.content[0].type === "text"
+          ? response.content[0].text
+          : "Unable to generate explanation.";
+
+      set((state) => ({
+        nodeExplanation: text,
+        nodeExplanationLoading: false,
+        nodeExplanationCache: { ...state.nodeExplanationCache, [nodeId]: text },
+      }));
+    } catch (err) {
+      set({
+        nodeExplanation: `Error: ${err instanceof Error ? err.message : "Failed to generate explanation"}`,
+        nodeExplanationLoading: false,
+      });
+    }
+  },
 
   startTour: () => {
     const { graph } = get();

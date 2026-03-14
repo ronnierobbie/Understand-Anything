@@ -1,3 +1,4 @@
+import ReactMarkdown from "react-markdown";
 import { useDashboardStore } from "../store";
 
 const typeBadgeColors: Record<string, string> = {
@@ -17,6 +18,12 @@ const complexityBadgeColors: Record<string, string> = {
 export default function NodeInfo() {
   const graph = useDashboardStore((s) => s.graph);
   const selectedNodeId = useDashboardStore((s) => s.selectedNodeId);
+  const apiKey = useDashboardStore((s) => s.apiKey);
+  const nodeExplanation = useDashboardStore((s) => s.nodeExplanation);
+  const nodeExplanationLoading = useDashboardStore(
+    (s) => s.nodeExplanationLoading,
+  );
+  const explainNode = useDashboardStore((s) => s.explainNode);
 
   const node = graph?.nodes.find((n) => n.id === selectedNodeId) ?? null;
 
@@ -72,6 +79,47 @@ export default function NodeInfo() {
       {node.languageNotes && (
         <div className="bg-blue-900/50 border border-blue-700 rounded p-3 mb-4 text-sm text-blue-200">
           {node.languageNotes}
+        </div>
+      )}
+
+      {apiKey && (
+        <div className="mb-4">
+          {!nodeExplanation && !nodeExplanationLoading && (
+            <button
+              onClick={() => explainNode(node.id)}
+              className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-500 transition-colors"
+            >
+              Explain This
+            </button>
+          )}
+          {nodeExplanationLoading && (
+            <div className="text-xs text-gray-400 animate-pulse">
+              Generating explanation...
+            </div>
+          )}
+          {nodeExplanation && (
+            <div className="bg-gray-700/50 rounded-lg p-3 text-sm text-gray-300 leading-relaxed">
+              <ReactMarkdown
+                components={{
+                  p: ({ children }) => (
+                    <p className="mb-2 last:mb-0">{children}</p>
+                  ),
+                  strong: ({ children }) => (
+                    <strong className="font-semibold text-white">
+                      {children}
+                    </strong>
+                  ),
+                  code: ({ children }) => (
+                    <code className="bg-gray-900 rounded px-1 py-0.5 text-[11px]">
+                      {children}
+                    </code>
+                  ),
+                }}
+              >
+                {nodeExplanation}
+              </ReactMarkdown>
+            </div>
+          )}
         </div>
       )}
 
