@@ -20,12 +20,15 @@ interface DashboardStore {
   chatMessages: ChatMessage[];
   chatLoading: boolean;
 
+  showLayers: boolean;
+
   setGraph: (graph: KnowledgeGraph) => void;
   selectNode: (nodeId: string | null) => void;
   setSearchQuery: (query: string) => void;
   setApiKey: (key: string) => void;
   sendChatMessage: (message: string) => Promise<void>;
   clearChat: () => void;
+  toggleLayers: () => void;
 }
 
 function buildSystemPrompt(
@@ -110,6 +113,8 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
   chatMessages: [],
   chatLoading: false,
 
+  showLayers: false,
+
   setGraph: (graph) => {
     const searchEngine = new SearchEngine(graph.nodes);
     const query = get().searchQuery;
@@ -187,4 +192,6 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
   },
 
   clearChat: () => set({ chatMessages: [] }),
+
+  toggleLayers: () => set((state) => ({ showLayers: !state.showLayers })),
 }));

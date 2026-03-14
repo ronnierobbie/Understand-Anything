@@ -6,6 +6,7 @@ import CodeViewer from "./components/CodeViewer";
 import SearchBar from "./components/SearchBar";
 import NodeInfo from "./components/NodeInfo";
 import ChatPanel from "./components/ChatPanel";
+import LayerLegend from "./components/LayerLegend";
 
 function App() {
   const graph = useDashboardStore((s) => s.graph);
@@ -36,6 +37,8 @@ function App() {
               <span>{nodeCount} nodes</span>
               <span className="text-gray-600">|</span>
               <span>{edgeCount} edges</span>
+              <span className="text-gray-600">|</span>
+              <LayerLegend />
             </>
           )}
         </div>
