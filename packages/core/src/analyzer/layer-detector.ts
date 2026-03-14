@@ -45,7 +45,7 @@ const LAYER_PATTERNS: Array<{ patterns: string[]; layerName: string; description
     description: "Shared utilities, helpers, and common libraries",
   },
   {
-    patterns: ["test", "spec", "__test__", "__spec__"],
+    patterns: ["test", "spec", "__test__", "__spec__", "__tests__", "__specs__"],
     layerName: "Test Layer",
     description: "Test files and test utilities",
   },
@@ -227,7 +227,13 @@ export function applyLLMLayers(
 
   for (const node of graph.nodes) {
     if (node.type !== "file") continue;
-    if (!node.filePath) continue;
+
+    if (!node.filePath) {
+      const other = layerMap.get("Other") ?? [];
+      other.push(node.id);
+      layerMap.set("Other", other);
+      continue;
+    }
 
     const normalizedPath = node.filePath.replace(/\\/g, "/");
     let assigned = false;
