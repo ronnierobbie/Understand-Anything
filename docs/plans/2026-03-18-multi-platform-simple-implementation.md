@@ -85,7 +85,7 @@ git commit -m "refactor: move pipeline agents into skills/understand/ as prompt 
 
 ---
 
-### Task 2: Update SKILL.md dispatch references
+### Task 2: Update SKILL.md dispatch references with context injection
 
 **Files:**
 - Modify: `understand-anything-plugin/skills/understand/SKILL.md`
@@ -94,67 +94,173 @@ git commit -m "refactor: move pipeline agents into skills/understand/ as prompt 
 
 Read `understand-anything-plugin/skills/understand/SKILL.md` in full.
 
-**Step 2: Update Phase 1 dispatch (line ~53)**
+**Step 2: Update Phase 0 — add context collection**
 
-Change:
+After the decision logic table (line ~47), add a new section for collecting project context that will be injected into later phases:
+
+```markdown
+7. **Collect project context for subagent injection:**
+   - Read `README.md` (or `README.rst`, `readme.md`) from `$PROJECT_ROOT` if it exists. Store as `$README_CONTENT` (first 3000 characters).
+   - Read the primary package manifest (`package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, `pom.xml`) if it exists. Store as `$MANIFEST_CONTENT`.
+   - Capture the top-level directory tree:
+     ```bash
+     find $PROJECT_ROOT -maxdepth 2 -type f | head -100
+     ```
+     Store as `$DIR_TREE`.
+   - Detect the project entry point by checking for common patterns: `src/index.ts`, `src/main.ts`, `src/App.tsx`, `main.py`, `main.go`, `src/main.rs`, `index.js`. Store first match as `$ENTRY_POINT`.
+```
+
+**Step 3: Update Phase 1 dispatch — inject README + manifest**
+
+Replace the Phase 1 dispatch line:
 ```
 Dispatch the **project-scanner** agent with this prompt:
 ```
 
-To:
-```
-Dispatch a subagent using the prompt template at `./project-scanner-prompt.md`. Read the template file, fill in the parameters below, and pass the full content as the subagent's prompt:
+With:
+```markdown
+Dispatch a subagent using the prompt template at `./project-scanner-prompt.md`. Read the template file and pass the full content as the subagent's prompt, appending the following additional context:
+
+> **Additional context from main session:**
+>
+> Project README (first 3000 chars):
+> ```
+> $README_CONTENT
+> ```
+>
+> Package manifest:
+> ```
+> $MANIFEST_CONTENT
+> ```
+>
+> Use this context to produce more accurate project name, description, and framework detection. The README and manifest are authoritative — prefer their information over heuristics.
+
+Pass these parameters in the dispatch prompt:
 ```
 
-**Step 3: Update Phase 2 dispatch (line ~75)**
+**Step 4: Update Phase 2 dispatch — inject scan results + framework context**
 
-Change:
+Replace the Phase 2 dispatch paragraph:
 ```
 For each batch, dispatch a **file-analyzer** agent. Run up to **3 agents concurrently** using parallel dispatch. Each agent gets this prompt:
 ```
 
-To:
-```
-For each batch, dispatch a subagent using the prompt template at `./file-analyzer-prompt.md`. Run up to **3 subagents concurrently** using parallel dispatch. Read the template once, then for each batch fill in the parameters below and pass the full content as the subagent's prompt:
+With:
+```markdown
+For each batch, dispatch a subagent using the prompt template at `./file-analyzer-prompt.md`. Run up to **3 subagents concurrently** using parallel dispatch. Read the template once, then for each batch pass the full template content as the subagent's prompt, appending the following additional context:
+
+> **Additional context from main session:**
+>
+> Project: `<projectName>` — `<projectDescription>`
+> Frameworks detected: `<frameworks from Phase 1>`
+> Languages: `<languages from Phase 1>`
+>
+> Framework-specific guidance:
+> - If React/Next.js: files in `app/` or `pages/` are routes, `components/` are UI, `lib/` or `utils/` are utilities
+> - If Express/Fastify: files in `routes/` are API endpoints, `middleware/` is middleware, `models/` or `db/` is data
+> - If Python Django: `views.py` are controllers, `models.py` is data, `urls.py` is routing, `templates/` is UI
+> - If Go: `cmd/` is entry points, `internal/` is private packages, `pkg/` is public packages
+>
+> Use this context to produce more accurate summaries and better classify file roles.
+
+Fill in batch-specific parameters below and dispatch:
 ```
 
-**Step 4: Update Phase 4 dispatch (line ~119)**
+**Step 5: Update Phase 4 dispatch — inject framework hints + directory tree**
 
-Change:
+Replace the Phase 4 dispatch line:
 ```
 Dispatch the **architecture-analyzer** agent with this prompt:
 ```
 
-To:
-```
-Dispatch a subagent using the prompt template at `./architecture-analyzer-prompt.md`. Read the template file, fill in the parameters below, and pass the full content as the subagent's prompt:
+With:
+```markdown
+Dispatch a subagent using the prompt template at `./architecture-analyzer-prompt.md`. Read the template file and pass the full content as the subagent's prompt, appending the following additional context:
+
+> **Additional context from main session:**
+>
+> Frameworks detected: `<frameworks from Phase 1>`
+>
+> Directory tree (top 2 levels):
+> ```
+> $DIR_TREE
+> ```
+>
+> Framework-specific layer hints:
+> - If React/Next.js: `app/` or `pages/` → UI Layer, `api/` → API Layer, `lib/` → Service Layer, `components/` → UI Layer
+> - If Express: `routes/` → API Layer, `controllers/` → Service Layer, `models/` → Data Layer, `middleware/` → Middleware Layer
+> - If Python Django: `views/` → API Layer, `models/` → Data Layer, `templates/` → UI Layer, `management/` → CLI Layer
+> - If Go: `cmd/` → Entry Points, `internal/` → Service Layer, `pkg/` → Shared Library, `api/` → API Layer
+>
+> Use the directory tree and framework hints to inform layer assignments. Directory structure is strong evidence for layer boundaries.
+
+Pass these parameters in the dispatch prompt:
 ```
 
-**Step 5: Update Phase 5 dispatch (line ~144)**
+Also add after the "For incremental updates" note:
+```markdown
+**Context for incremental updates:** When re-running architecture analysis, also inject the previous layer definitions:
 
-Change:
+> Previous layer definitions (for naming consistency):
+> ```json
+> [previous layers from existing graph]
+> ```
+>
+> Maintain the same layer names and IDs where possible. Only add/remove layers if the file structure has materially changed.
+```
+
+**Step 6: Update Phase 5 dispatch — inject README + entry point**
+
+Replace the Phase 5 dispatch line:
 ```
 Dispatch the **tour-builder** agent with this prompt:
 ```
 
-To:
-```
-Dispatch a subagent using the prompt template at `./tour-builder-prompt.md`. Read the template file, fill in the parameters below, and pass the full content as the subagent's prompt:
+With:
+```markdown
+Dispatch a subagent using the prompt template at `./tour-builder-prompt.md`. Read the template file and pass the full content as the subagent's prompt, appending the following additional context:
+
+> **Additional context from main session:**
+>
+> Project README (first 3000 chars):
+> ```
+> $README_CONTENT
+> ```
+>
+> Project entry point: `$ENTRY_POINT`
+>
+> Use the README to align the tour narrative with the project's own documentation. Start the tour from the entry point if one was detected. The tour should tell the same story the README tells, but through the lens of actual code structure.
+
+Pass these parameters in the dispatch prompt:
 ```
 
-**Step 6: Update Phase 6 dispatch (line ~195)**
+**Step 7: Update Phase 6 dispatch — inject scan results for cross-validation**
 
-Change:
+Replace the Phase 6 dispatch line:
 ```
 2. Dispatch the **graph-reviewer** agent with this prompt:
 ```
 
-To:
-```
-2. Dispatch a subagent using the prompt template at `./graph-reviewer-prompt.md`. Read the template file, fill in the parameters below, and pass the full content as the subagent's prompt:
+With:
+```markdown
+2. Dispatch a subagent using the prompt template at `./graph-reviewer-prompt.md`. Read the template file and pass the full content as the subagent's prompt, appending the following additional context:
+
+> **Additional context from main session:**
+>
+> Phase 1 scan results (file inventory):
+> ```json
+> [list of {path, sizeLines} from scan-result.json]
+> ```
+>
+> Phase warnings/errors accumulated during analysis:
+> - [list any batch failures, skipped files, or warnings from Phases 2-5]
+>
+> Cross-validate: every file in the scan inventory should have a corresponding `file:` node in the graph. Flag any missing files. Also flag any graph nodes whose `filePath` doesn't appear in the scan inventory.
+
+Pass these parameters in the dispatch prompt:
 ```
 
-**Step 7: Update Error Handling section (line ~251)**
+**Step 8: Update Error Handling section**
 
 Change:
 ```
@@ -164,17 +270,18 @@ Change:
 To:
 ```
 - If any subagent dispatch fails, retry **once** with the same prompt plus additional context about the failure.
+- Track all warnings and errors from each phase in a `$PHASE_WARNINGS` list. Pass this list to the graph-reviewer in Phase 6 for comprehensive validation.
 ```
 
-**Step 8: Verify no references to "agent" dispatch remain (only "subagent")**
+**Step 9: Verify no references to named agent dispatch remain**
 
 Search for "Dispatch the **" in the file — should find 0 results.
 
-**Step 9: Commit**
+**Step 10: Commit**
 
 ```bash
 git add understand-anything-plugin/skills/understand/SKILL.md
-git commit -m "refactor: update SKILL.md to dispatch subagents via prompt templates"
+git commit -m "refactor: update SKILL.md to dispatch subagents with context injection"
 ```
 
 ---
