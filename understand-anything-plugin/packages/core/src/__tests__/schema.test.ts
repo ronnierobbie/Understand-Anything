@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { validateGraph, normalizeGraph } from "../schema.js";
+import {
+  validateGraph,
+  normalizeGraph,
+  NODE_TYPE_ALIASES,
+  EDGE_TYPE_ALIASES,
+} from "../schema.js";
 import type { KnowledgeGraph } from "../types.js";
 
 const validGraph: KnowledgeGraph = {
@@ -238,5 +243,23 @@ describe("schema validation", () => {
 
     const result = validateGraph(graph);
     expect(result.success).toBe(false);
+  });
+
+  it("NODE_TYPE_ALIASES values are never alias keys (no chains)", () => {
+    for (const [alias, target] of Object.entries(NODE_TYPE_ALIASES)) {
+      expect(
+        NODE_TYPE_ALIASES,
+        `chain detected: ${alias} → ${target} → ${NODE_TYPE_ALIASES[target]}`,
+      ).not.toHaveProperty(target);
+    }
+  });
+
+  it("EDGE_TYPE_ALIASES values are never alias keys (no chains)", () => {
+    for (const [alias, target] of Object.entries(EDGE_TYPE_ALIASES)) {
+      expect(
+        EDGE_TYPE_ALIASES,
+        `chain detected: ${alias} → ${target} → ${EDGE_TYPE_ALIASES[target]}`,
+      ).not.toHaveProperty(target);
+    }
   });
 });
