@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { validateGraph } from "@understand-anything/core/schema";
+import type { GraphIssue } from "@understand-anything/core/schema";
 import { useDashboardStore } from "./store";
 import GraphView from "./components/GraphView";
 import CodeViewer from "./components/CodeViewer";
@@ -11,6 +12,7 @@ import LearnPanel from "./components/LearnPanel";
 import PersonaSelector from "./components/PersonaSelector";
 import ProjectOverview from "./components/ProjectOverview";
 import KeyboardShortcutsHelp from "./components/KeyboardShortcutsHelp";
+import WarningBanner from "./components/WarningBanner";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import type { KeyboardShortcut } from "./hooks/useKeyboardShortcuts";
 
@@ -24,6 +26,7 @@ function App() {
   const closeCodeViewer = useDashboardStore((s) => s.closeCodeViewer);
   const setDiffOverlay = useDashboardStore((s) => s.setDiffOverlay);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [graphIssues, setGraphIssues] = useState<GraphIssue[]>([]);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
   // Define keyboard shortcuts
@@ -123,10 +126,20 @@ function App() {
         const result = validateGraph(data);
         if (result.success && result.data) {
           setGraph(result.data);
+          setGraphIssues(result.issues);
+          for (const issue of result.issues) {
+            if (issue.level === "auto-corrected") {
+              console.warn(`[graph] auto-corrected: ${issue.message}`);
+            } else if (issue.level === "dropped") {
+              console.error(`[graph] dropped: ${issue.message}`);
+            }
+          }
+        } else if (result.fatal) {
+          console.error("Knowledge graph validation failed:", result.fatal);
+          setLoadError(`Invalid knowledge graph: ${result.fatal}`);
         } else {
-          const errorMsg = result.errors?.join("; ") ?? "Unknown validation error";
-          console.error("Knowledge graph validation failed:", errorMsg);
-          setLoadError(`Invalid knowledge graph: ${errorMsg}`);
+          console.error("Knowledge graph validation failed: unknown error");
+          setLoadError("Invalid knowledge graph: unknown validation error");
         }
       })
       .catch((err) => {
@@ -209,6 +222,11 @@ function App() {
 
       {/* Search */}
       <SearchBar />
+
+      {/* Validation warning banner */}
+      {graphIssues.length > 0 && !loadError && (
+        <WarningBanner issues={graphIssues} />
+      )}
 
       {/* Error banner */}
       {loadError && (
